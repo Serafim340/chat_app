@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -51,6 +54,22 @@ func (r *room) run() {
 	}
 }
 
+var rooms = make(map[string]*room)
+
+var mu sync.Mutex
+
+func getRoom(name string) *room {
+	mu.Lock()
+	defer mu.Unlock()
+	if r, ok := rooms[name]; ok {
+		return r
+	}
+	r := newRoom()
+	rooms[name] = r
+	go r.run()
+	return r
+}
+
 // update room
 const (
 	socketBufferSize  = 1024
@@ -60,6 +79,14 @@ const (
 var upgrader = &websocket.Upgrader{ReadBufferSize: socketBufferSize, WriteBufferSize: messageBufferSize}
 
 func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	roomName := req.URL.Query().Get("room")
+	if roomName == "" {
+		http.Error(w, "No room specified", http.StatusBadRequest)
+		return
+	}
+
+	realRoom := getRoom(roomName)
+
 	socket, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		log.Fatal("ServerHTTP:", err)
@@ -69,8 +96,9 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		socket: socket,
 		recive: make(chan []byte, messageBufferSize),
 		room:   r,
+		name:   fmt.Sprintf("User_%d", rand.Intn(1000)),
 	}
-	r.join <- client
+	realRoom.join <- client
 	defer func() { r.leave <- client }()
 
 	go client.write()

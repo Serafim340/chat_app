@@ -1,6 +1,11 @@
 package main
 
-import "github.com/gorilla/websocket"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/gorilla/websocket"
+)
 
 type client struct {
 
@@ -12,9 +17,11 @@ type client struct {
 
 	//room chat
 	room *room
+
+	name string
 }
 
-//sent message
+// sent message
 func (c *client) read() {
 
 	defer c.socket.Close()
@@ -24,7 +31,18 @@ func (c *client) read() {
 		if err != nil {
 			return
 		}
-		c.room.forward <- msg
+		outgoing := map[string]string{
+			"name":    c.name,
+			"message": string(msg),
+		}
+
+		jsMessage, err := json.Marshal(outgoing)
+		if err != nil {
+			fmt.Println("Encoding failed", err)
+			continue
+		}
+		c.room.forward <- jsMessage
+
 	}
 }
 

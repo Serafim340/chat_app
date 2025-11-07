@@ -28,9 +28,18 @@ func main() {
 	flag.Parse()
 
 	r := newRoom()
-
-	http.Handle("/", &templateHandler{filename: "chat.html"})
-	http.Handle("/room", r)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/", &templateHandler{filename: "index.html"})
+	http.Handle("/chat", &templateHandler{filename: "chat.html"})
+	http.HandleFunc("/room", func(w http.ResponseWriter, r *http.Request) {
+		roomName := r.URL.Query().Get("room")
+		if roomName == "" {
+			http.Error(w, "No room specified", http.StatusBadRequest)
+			return
+		}
+		realRoom := getRoom(roomName)
+		realRoom.ServeHTTP(w, r)
+	})
 
 	go r.run()
 
