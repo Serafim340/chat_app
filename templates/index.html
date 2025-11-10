@@ -1,18 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Select a Chat Room</title>
-  <link rel="stylesheet" href="/static/css/styles.css" />
+  <meta charset="UTF-8">
+  <title>Join Chat Room</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="index-body">
   <h1>Join a Chat Room</h1>
-  <form action="/chat" method="get">
-    <input type="text" name="room" placeholder="Enter channel name..." required />
+
+  <form id="joinForm" action="/chat" method="get">
+    <input type="text" name="nick" placeholder="Enter nickname…" required />
+
+    <input type="text" name="room" placeholder="Enter room name…" required id="roomInput">
+
+    <select id="existingRooms">
+      <option value="">— or choose existing —</option>
+    </select>
+
     <button type="submit">Join</button>
   </form>
 
-  <!-- Optional: index.js if you want any client JS here -->
-  <script src="/static/js/index.js"></script>
+  <script>
+    const roomInput = document.getElementById("roomInput");
+    const existing = document.getElementById("existingRooms");
+
+    // Подгружаем существующие комнаты
+    fetch("/rooms")
+      .then(r => r.json())
+      .then(list => {
+        list.forEach(name => {
+          const o = document.createElement("option");
+          o.value = name;
+          o.textContent = name;
+          existing.appendChild(o);
+        });
+      });
+
+    // При выборе комнаты из списка, подставляем в input
+    existing.addEventListener("change", () => {
+      if (existing.value) {
+        roomInput.value = existing.value;
+      }
+    });
+  </script>
 </body>
 </html>

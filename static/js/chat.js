@@ -1,59 +1,78 @@
 const params = new URLSearchParams(window.location.search);
 const room = params.get("room");
+const nick = params.get("nick");
 
-if (!room) {
-  alert("No room specified. Redirecting to homepage...");
+if (!room || !nick) {
+  alert("Missing room or nickname. Redirecting…");
   window.location.href = "/";
 }
 
-const socket = new WebSocket(`ws://${location.host}/room?room=${room}`);
+document.getElementById("roomTitle").textContent = room;
+
+const socket = new WebSocket(`ws://${location.host}/room?room=${room}&nick=${nick}`);
 
 socket.onmessage = (event) => {
+  let data;
   try {
-    const data = JSON.parse(event.data);
-
-    // Create the container div
-    const msgContainer = document.createElement("div");
-    msgContainer.classList.add("message-container");
-
-    // Create the username div
-    const usernameDiv = document.createElement("div");
-    usernameDiv.classList.add("username");
-    usernameDiv.textContent = data.name;
-
-    // Create the message div
-    const messageDiv = document.createElement("div");
-    messageDiv.classList.add("message");
-    messageDiv.textContent = data.message;
-
-    // Append username and message in correct order
-    msgContainer.appendChild(usernameDiv);
-    msgContainer.appendChild(messageDiv);
-
-    // Append the whole message container to the messages div
-    document.getElementById("messages").appendChild(msgContainer);
-
-    // Auto-scroll
-    const messagesDiv = document.getElementById("messages");
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-  } catch (err) {
-    console.error("Invalid JSON received:", event.data);
+    data = JSON.parse(event.data);
+  } catch {
+    console.warn("Invalid JSON:", event.data);
+    return;
   }
+
+  if (data.type === "users") {
+    updateUserPopup(data.list);
+    return;
+  }
+
+  if (data.type === "message") {
+    addMessage(data.name, data.message);
+  }
+};
+
+function addMessage(name, message) {
+  const c = document.createElement("div");
+  c.classList.add("message-container");
+
+  const u = document.createElement("div");
+  u.classList.add("username");
+  u.textContent = name;
+
+  const m = document.createElement("div");
+  m.classList.add("message");
+  m.textContent = message;
+
+  c.appendChild(u);
+  c.appendChild(m);
+  const messagesDiv = document.getElementById("messages");
+  messagesDiv.appendChild(c);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function updateUserPopup(users) {
+  const popup = document.getElementById("usersPopup");
+  popup.innerHTML = "<b>Online:</b><br>";
+
+  users.forEach(u => {
+    const div = document.createElement("div");
+    div.textContent = u;
+    popup.appendChild(div);
+  });
+}
+
+document.getElementById("usersBtn").onclick = () => {
+  document.getElementById("usersPopup").classList.toggle("hidden");
 };
 
 function sendMessage() {
   const input = document.getElementById("msg");
-  if (input.value.trim() !== "") {
+  if (input.value.trim()) {
     socket.send(input.value);
     input.value = "";
   }
 }
 
-document.getElementById("sendBtn").addEventListener("click", sendMessage);
-
-document.getElementById("msg").addEventListener("keyup", function (event) {
-  if (event.key === "Enter") {
-    sendMessage();
-  }
+document.getElementById("sendBtn").onclick = sendMessage;
+document.getElementById("msg").addEventListener("keyup", e => {
+  if (e.key === "Enter") sendMessage();
 });

@@ -2,16 +2,10 @@ package hub
 
 import (
 	"encoding/json"
+	"log"
 	"time"
 
 	"github.com/gorilla/websocket"
-)
-
-const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = 50 * time.Second
-	maxMessageSize = 512
 )
 
 type client struct {
@@ -21,14 +15,20 @@ type client struct {
 	name    string
 }
 
-func newClient(socket *websocket.Conn, room *room, name string) *client {
+func newClient(socket *websocket.Conn, room *room, nick string) *client {
 	return &client{
 		socket:  socket,
 		receive: make(chan []byte, 256),
 		room:    room,
-		name:    name,
+		name:    nick,
 	}
 }
+
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = 50 * time.Second
+)
 
 func (c *client) read() {
 	defer func() {
@@ -36,23 +36,32 @@ func (c *client) read() {
 		c.socket.Close()
 	}()
 
-	c.socket.SetReadLimit(maxMessageSize)
+	c.socket.SetReadLimit(512)
 	c.socket.SetReadDeadline(time.Now().Add(pongWait))
-	c.socket.SetPongHandler(func(string) error { c.socket.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.socket.SetPongHandler(func(string) error {
+		c.socket.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	for {
-		_, msg, err := c.socket.ReadMessage()
+		_, raw, err := c.socket.ReadMessage()
 		if err != nil {
 			return
 		}
-		outgoing := map[string]string{
+
+		// формируем сообщение клиента
+		msg := map[string]interface{}{
+			"type":    "message",
 			"name":    c.name,
-			"message": string(msg),
+			"message": string(raw),
 		}
-		jsMsg, err := json.Marshal(outgoing)
+
+		jsMsg, err := json.Marshal(msg)
 		if err != nil {
+			log.Println("JSON marshal error:", err)
 			continue
 		}
+
 		c.room.forward <- jsMsg
 	}
 }
@@ -72,14 +81,19 @@ func (c *client) write() {
 				c.socket.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := c.socket.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
+			c.socket.WriteMessage(websocket.TextMessage, msg)
 		case <-ticker.C:
 			c.socket.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.socket.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
+			c.socket.WriteMessage(websocket.PingMessage, nil)
 		}
 	}
+}
+
+func (c *client) sendJSON(v interface{}) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Println("JSON marshal error:", err)
+		return
+	}
+	c.receive <- data
 }

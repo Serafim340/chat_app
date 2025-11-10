@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Chat Room</title>
-  <link rel="stylesheet" href="/static/css/styles.css" />
+  <meta charset="UTF-8">
+  <title>Chat</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="chat-body">
-  <header>Chat Room</header>
+  <header>
+    <span id="roomTitle">Room</span>
+    <button id="usersBtn" class="users-btn">👥</button>
+    <div id="usersPopup" class="users-popup hidden"></div>
+  </header>
+
   <div id="messages"></div>
 
   <div class="chat-input">

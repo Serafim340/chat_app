@@ -10,16 +10,26 @@ var (
 	mu    sync.Mutex
 )
 
-// ServeRoomHTTP — единственная экспортируемая функция
-func ServeRoomHTTP(w http.ResponseWriter, req *http.Request, name string) {
+func ServeRoomHTTP(w http.ResponseWriter, req *http.Request, roomName string, nick string) {
 	mu.Lock()
-	r, ok := rooms[name]
+	r, ok := rooms[roomName]
 	if !ok {
-		r = newRoom()
-		rooms[name] = r
+		r = newRoom(roomName)
+		rooms[roomName] = r
 		go r.run()
 	}
 	mu.Unlock()
 
-	r.serveHTTP(w, req)
+	r.serveHTTP(w, req, nick)
+}
+
+// GetRoomNames — список всех комнат
+func GetRoomNames() []string {
+	mu.Lock()
+	defer mu.Unlock()
+	names := []string{}
+	for n := range rooms {
+		names = append(names, n)
+	}
+	return names
 }

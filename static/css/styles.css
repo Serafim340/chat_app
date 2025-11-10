@@ -9,13 +9,42 @@ body {
 /* Header for chat.html */
 header {
   background-color: #333;
-  color: #fff;
+  color: #fff; /* цвет текста в заголовке */
   padding: 10px;
-  text-align: center;
-  font-size: 24px;
+  font-size: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-/* Message display */
+/* Button for online users popup */
+.users-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* Popup for online users */
+.users-popup {
+  position: absolute;
+  right: 10px;
+  top: 50px;
+  background: #fff; /* белый фон */
+  color: #333;      /* темный текст */
+  padding: 10px;
+  border: 1px solid #ccc;
+  width: 150px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.2);
+  z-index: 100;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Messages area */
 #messages {
   height: 80vh;
   overflow-y: auto;

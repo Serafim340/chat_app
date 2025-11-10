@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -9,28 +10,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"text/template"
 	"time"
 
 	"chat_app/internal/hub"
 )
 
-var roomNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,20}$`)
-
-type templateHandler struct {
-	filename string
-	templ    *template.Template
-}
-
-func (t *templateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if t.templ == nil {
-		path := filepath.Join("templates", t.filename)
-		t.templ = template.Must(template.ParseFiles(path))
-	}
-	if err := t.templ.Execute(w, nil); err != nil {
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-	}
-}
+var regExp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,20}$`)
 
 func main() {
 	addr := flag.String("addr", ":8000", "Address of the app")
@@ -39,16 +24,53 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	mux.Handle("/", &templateHandler{filename: "index.html"})
-	mux.Handle("/chat", &templateHandler{filename: "chat.html"})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join("templates", "index.html"))
+	})
+	mux.HandleFunc("/rooms", func(w http.ResponseWriter, r *http.Request) {
+		list := hub.GetRoomNames()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(list)
+	})
+	mux.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
+		room := r.URL.Query().Get("room")
+		nick := r.URL.Query().Get("nick")
+		existing := r.URL.Query().Get("existing")
 
-	mux.HandleFunc("/room", func(w http.ResponseWriter, r *http.Request) {
-		roomName := r.URL.Query().Get("room")
-		if !roomNamePattern.MatchString(roomName) {
+		// Если пользователь выбрал комнату из списка — она имеет приоритет
+		if existing != "" {
+			room = existing
+		}
+
+		if room == "" || !regExp.MatchString(room) {
 			http.Error(w, "Invalid room name", http.StatusBadRequest)
 			return
 		}
-		hub.ServeRoomHTTP(w, r, roomName)
+
+		if nick == "" || !regExp.MatchString(nick) {
+			http.Error(w, "Invalid nickname", http.StatusBadRequest)
+			return
+		}
+
+		// Просто отдать шаблон — chat.js сам из URL возьмёт параметры
+		http.ServeFile(w, r, filepath.Join("templates", "chat.html"))
+	})
+
+	mux.HandleFunc("/room", func(w http.ResponseWriter, r *http.Request) {
+		roomName := r.URL.Query().Get("room")
+		nick := r.URL.Query().Get("nick")
+
+		if roomName == "" || !regExp.MatchString(roomName) {
+			http.Error(w, "Invalid room name", http.StatusBadRequest)
+			return
+		}
+
+		if nick == "" || !regExp.MatchString(nick) {
+			http.Error(w, "Invalid nickname", http.StatusBadRequest)
+			return
+		}
+
+		hub.ServeRoomHTTP(w, r, roomName, nick)
 	})
 
 	server := &http.Server{

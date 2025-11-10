@@ -1,31 +1,30 @@
 package hub
 
 import (
-	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-const messageBufferSize = 256
-
 var upgrader = &websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: messageBufferSize,
+	WriteBufferSize: 256,
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 type room struct {
+	name    string
 	join    chan *client
 	leave   chan *client
 	forward chan []byte
 	clients map[*client]bool
 }
 
-func newRoom() *room {
+func newRoom(name string) *room {
 	return &room{
+		name:    name,
 		join:    make(chan *client),
 		leave:   make(chan *client),
 		forward: make(chan []byte),
@@ -34,6 +33,9 @@ func newRoom() *room {
 }
 
 func (r *room) run() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case c := <-r.join:
@@ -48,6 +50,8 @@ func (r *room) run() {
 					r.removeClient(c)
 				}
 			}
+		case <-ticker.C:
+			r.broadcastUsers()
 		}
 	}
 }
@@ -59,15 +63,30 @@ func (r *room) removeClient(c *client) {
 	}
 }
 
-// serveHTTP — приватный метод
-func (r *room) serveHTTP(w http.ResponseWriter, req *http.Request) {
+// отправка списка активных пользователей
+func (r *room) broadcastUsers() {
+	users := []string{}
+	for c := range r.clients {
+		users = append(users, c.name)
+	}
+	msg := map[string]interface{}{
+		"type": "users",
+		"list": users,
+	}
+	for c := range r.clients {
+		c.sendJSON(msg)
+	}
+}
+
+// serveHTTP с ником пользователя
+func (r *room) serveHTTP(w http.ResponseWriter, req *http.Request, nick string) {
 	socket, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
 	}
 
-	client := newClient(socket, r, fmt.Sprintf("User_%d", rand.Intn(1000)))
+	client := newClient(socket, r, nick)
 	r.join <- client
 	defer func() { r.leave <- client }()
 
